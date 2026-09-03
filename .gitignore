@@ -1,0 +1,16 @@
+# Local Python environments
+.venv/
+.venv-1/
+__pycache__/
+*.py[cod]
+
+# Client workbook and copied workbooks
+data/raw/
+workbook_copy/
+
+# Generated and potentially sensitive datasets
+data/cleaned/
+data/dated/
+data/aggregated/
+data/featured/
+outputs/
