@@ -14,7 +14,6 @@ DEFAULT_CADENCE_DAYS = 7  # fallback spacing where no anchor exists at all nearb
 
 DROPPED = {"Class 166", "Copy of Class 153", "Class 203", "Class 203B"}
 NON_BOOKING = {"2024", "Form Responses 1", "List", "Sheet3", "Sheet4"}
-UNANCHORABLE = {"YEP", "isha bday"}
 
 
 def norm_name(name):
@@ -43,10 +42,52 @@ for sheet in ["2024", "Form Responses 1"]:
             if nm:
                 name_to_dates.setdefault(nm, []).append(date)
 
-# ---- 2. Walk the workbook's own tab order (confirmed to run newest -> oldest) ----
+# ---- 2. Build the oldest -> newest walk order.
+#    Numbered sheets are ordered by their extracted sequence number - this is the
+#    client-confirmed ground truth (answer #2), and it's more reliable than tab
+#    position: the tab order breaks down at the very tail of the workbook (Batch 124
+#    is immediately followed by Batch 121, 122, 123 - ascending, not descending, unlike
+#    every other stretch of the workbook). Named/special sheets have no number, so for
+#    those only, tab position relative to their nearest numbered neighbors is used to
+#    slot them into the sequence. ----
 wb = openpyxl.load_workbook(PATH, data_only=True)
-group_c_ordered = [s for s in wb.sheetnames if s not in NON_BOOKING and s not in DROPPED]
-group_c_oldest_first = list(reversed(group_c_ordered))  # walk oldest -> newest
+tab_order = [s for s in wb.sheetnames if s not in NON_BOOKING and s not in DROPPED]
+
+number_pat = re.compile(r"(class|batch|cf)", re.IGNORECASE)
+digits_pat = re.compile(r"\d+")
+
+
+def extract_num(name):
+    if number_pat.search(name):
+        digits = digits_pat.findall(name)
+        if digits:
+            return int(digits[-1])
+    return None
+
+
+numbered_sheets = {s: extract_num(s) for s in tab_order if extract_num(s) is not None}
+named_sheets = [s for s in tab_order if s not in numbered_sheets]
+
+sort_key = dict(numbered_sheets)
+for s in named_sheets:
+    pos = tab_order.index(s)
+    before_nums = [numbered_sheets[t] for t in tab_order[:pos] if t in numbered_sheets]
+    after_nums = [numbered_sheets[t] for t in tab_order[pos + 1:] if t in numbered_sheets]
+    # tab order runs newest -> oldest, so the nearest numbered sheet *before* this one
+    # in tab order is the higher (newer) number, and the nearest *after* is lower (older)
+    newer_num = before_nums[-1] if before_nums else None
+    older_num = after_nums[0] if after_nums else None
+    if newer_num is not None and older_num is not None:
+        sort_key[s] = (newer_num + older_num) / 2
+    elif older_num is not None:
+        sort_key[s] = older_num - 0.5
+    elif newer_num is not None:
+        sort_key[s] = newer_num + 0.5
+    else:
+        sort_key[s] = 0  # shouldn't happen - no numbered sheets at all
+
+group_c_ordered = sorted(tab_order, key=lambda s: -sort_key[s])  # newest -> oldest, for output
+group_c_oldest_first = sorted(tab_order, key=lambda s: sort_key[s])  # oldest -> newest, for the walk
 
 # ---- 3. Compute a name-matched candidate anchor for every Group C sheet ----
 candidates = []
@@ -54,7 +95,7 @@ for sheet in group_c_oldest_first:
     df = pd.read_excel(PATH, sheet_name=sheet, header=0)
     if "Name" not in df.columns:
         candidates.append({"sheet": sheet, "n_participants": len(df), "n_matches": 0,
-                           "mode_date": None, "agreement": 0.0})
+                            "mode_date": None, "agreement": 0.0})
         continue
     names = df["Name"].dropna().apply(norm_name)
     matched_dates = []
@@ -66,11 +107,13 @@ for sheet in group_c_oldest_first:
     else:
         mode_date, agreement = None, 0.0
     candidates.append({"sheet": sheet, "n_participants": len(names), "n_matches": len(matched_dates),
-                       "mode_date": mode_date, "agreement": round(agreement, 2)})
+                        "mode_date": mode_date, "agreement": round(agreement, 2)})
 
 cand_df = pd.DataFrame(candidates).set_index("sheet").loc[group_c_oldest_first]
 
-# ---- 4. Accept anchors that clear the confidence bar and move forward in time ----
+# ---- 4. Accept anchors that (a) clear the confidence bar and (b) are strictly later
+#          than the last accepted anchor walking oldest -> newest. Reject anything that
+#          would go backwards in time - that's the repeat-customer contamination case. ----
 accepted = {}
 rejected = []
 last_accepted_date = None
@@ -81,17 +124,19 @@ for sheet, row in cand_df.iterrows():
             accepted[sheet] = row["mode_date"]
             last_accepted_date = row["mode_date"]
             continue
-        rejected.append((sheet, row["mode_date"], "would go backwards vs. previous anchor"))
+        else:
+            rejected.append((sheet, row["mode_date"], "would go backwards vs. previous anchor"))
+    # else: not enough signal, falls through to interpolation
 
-# ---- 5. Fill remaining sheets by interpolation or weekly edge extrapolation ----
+# ---- 5. Fill every remaining sheet by interpolating between the nearest accepted
+#          anchors on either side (by position in the oldest->newest walk). Sheets with
+#          no anchor on one side (e.g. the newest cluster) extrapolate using the default
+#          weekly cadence instead. ----
 positions = {s: i for i, s in enumerate(group_c_oldest_first)}
 anchor_positions = sorted(positions[s] for s in accepted)
 
 final_dates = {}
 for sheet in group_c_oldest_first:
-    if sheet in UNANCHORABLE:
-        final_dates[sheet] = (None, "tier 2 only - no date clue")
-        continue
     if sheet in accepted:
         final_dates[sheet] = (accepted[sheet], "name-matched anchor")
         continue
@@ -109,12 +154,12 @@ for sheet in group_c_oldest_first:
         p0 = before[-1]
         steps = pos - p0
         final_dates[sheet] = (accepted[group_c_oldest_first[p0]] + timedelta(days=DEFAULT_CADENCE_DAYS * steps),
-                              "extrapolated (weekly cadence, no later anchor)")
+                               "extrapolated (weekly cadence, no later anchor)")
     elif after:
         p1 = after[0]
         steps = p1 - pos
         final_dates[sheet] = (accepted[group_c_oldest_first[p1]] - timedelta(days=DEFAULT_CADENCE_DAYS * steps),
-                              "extrapolated (weekly cadence, no earlier anchor)")
+                               "extrapolated (weekly cadence, no earlier anchor)")
     else:
         final_dates[sheet] = (None, "no anchor available at all - needs client input")
 
@@ -149,12 +194,12 @@ print(f"  extrapolated (edge, no anchor) : {n_extrap}")
 print(f"  no date at all                : {n_none}")
 
 if rejected:
-    print(f"\nRejected {len(rejected)} candidate anchor(s) as inconsistent with sequence order:")
+    print(f"\n⚠ Rejected {len(rejected)} candidate anchor(s) as inconsistent with sequence order:")
     for sheet, date, reason in rejected:
         print(f"   {sheet}: candidate {date} - {reason}")
 
 if n_none:
-    print("\nSheets with NO usable anchor on either side (need direct client input):")
+    print("\n⚠ Sheets with NO usable anchor on either side (need direct client input):")
     for s in group_c_ordered:
         if final_dates[s][0] is None:
             print(f"   {s}")

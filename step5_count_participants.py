@@ -8,7 +8,6 @@ OUT_PATH = "outputs/participant_counts.csv"
 
 DROPPED = {"Class 166", "Copy of Class 153", "Class 203", "Class 203B"}
 NON_BOOKING = {"2024", "Form Responses 1", "List", "Sheet3", "Sheet4"}
-TIER2_ONLY = {"YEP", "isha bday"}
 COMPANION_PAT = re.compile(r"^\d+\.\s*Full name", re.IGNORECASE)
 
 
@@ -68,10 +67,10 @@ for sheet in group_c_sheets:
         date_confidence = date_row.iloc[0]["date_confidence"]
         date_source = date_row.iloc[0]["date_source"]
 
-    if sheet in TIER2_ONLY:
-        assigned_date = None
-        date_confidence = None
-        date_source = "tier 2 only - no date clue"
+    # NOTE: the old TIER2_ONLY={"YEP","isha bday"} override that forced
+    # assigned_date=None here has been removed - Step 4's fixed number-based
+    # ordering now gives both of those sheets real (if lower-confidence)
+    # dates, and this script should just pass those through.
 
     group_c_rows.append({
         "source_group": "C",
@@ -81,7 +80,7 @@ for sheet in group_c_sheets:
         "assigned_date": assigned_date,
         "date_confidence": date_confidence,
         "date_source": date_source,
-        "tier2_only": sheet in TIER2_ONLY,
+        "tier2_only": assigned_date is None,
     })
 
 out_df = pd.DataFrame(form_rows + group_c_rows)
