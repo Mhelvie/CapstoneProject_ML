@@ -1,0 +1,14 @@
+forecast_date,days_ahead,predicted_participants,predicted_revenue_php,demand_level,season_period,instructors_needed
+2026-09-16,7,12.5,49170.39,Low,Off-Peak,4
+2026-09-23,14,13.4,49026.49,Low,Off-Peak,4
+2026-09-30,21,16.9,67271.43,Medium,Off-Peak,5
+2026-10-07,28,16.9,69000.45,Medium,Shoulder,5
+2026-10-14,35,15.4,61244.89,Medium,Shoulder,4
+2026-10-21,42,17.0,60553.81,Medium,Shoulder,5
+2026-10-28,49,17.2,69237.18,Medium,Shoulder,5
+2026-11-04,56,17.1,66627.34,Medium,Shoulder,5
+2026-11-11,63,16.3,63644.55,Medium,Shoulder,5
+2026-11-18,70,16.4,63488.55,Medium,Shoulder,5
+2026-11-25,77,17.6,64673.36,Medium,Shoulder,5
+2026-12-02,84,24.3,104273.77,High,Peak,7
+2026-12-09,91,21.5,87956.53,High,Peak,6

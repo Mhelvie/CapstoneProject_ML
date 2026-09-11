@@ -8,9 +8,14 @@ __pycache__/
 data/raw/
 workbook_copy/
 
-# Generated and potentially sensitive datasets
+# Generated and intermediate datasets
 data/cleaned/
 data/dated/
 data/aggregated/
 data/featured/
-outputs/
+
+# Model outputs & forecasts (allow forecast.csv and model weights)
+outputs/*
+!outputs/forecast.csv
+!outputs/models/
+!outputs/models/*
