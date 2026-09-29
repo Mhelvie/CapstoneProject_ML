@@ -23,7 +23,7 @@ jobs:
 
     env:
       LARAVEL_API_URL: ${{ secrets.LARAVEL_API_URL || 'https://campfreedive.ph/api/v1/ml' }}
-      ML_TOKEN: ${{ secrets.ML_TOKEN || 'cfml_live_8eef173d6b5670cab3ec93d7ae53736a4128e079484c718819f20625' }}
+      ML_TOKEN: ${{ secrets.ML_TOKEN }}
       PYTHONUNBUFFERED: "1"
 
     steps:

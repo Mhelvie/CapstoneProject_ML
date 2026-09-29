@@ -3,6 +3,10 @@
 .venv-1/
 __pycache__/
 *.py[cod]
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # Client workbook and copied workbooks
 data/raw/
@@ -14,8 +18,10 @@ data/dated/
 data/aggregated/
 data/featured/
 
-# Model outputs & forecasts (allow forecast.csv and model weights)
+# Model outputs & forecasts (allow forecast.csv, monthly aggregations, classifications, and model weights)
 outputs/*
 !outputs/forecast.csv
+!outputs/forecast_monthly.csv
+!outputs/monthly_demand_classifications.json
 !outputs/models/
 !outputs/models/*
